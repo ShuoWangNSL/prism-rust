@@ -31,6 +31,7 @@ petgraph = "0.4"
 url = "1.7"
 base64 = "0.10"
 heapsize = "0.4"
+rustc-hex = "2"
 
 #chain = { path = "src/chain" }
 primitives = { path = "src/primitives" }

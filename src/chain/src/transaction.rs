@@ -8,8 +8,9 @@ use hash::H256;
 use heapsize::HeapSizeOf;
 use hex::FromHex;
 use rand::Rng;
-use ser::{deserialize, serialize, serialize_with_flags, SERIALIZE_TRANSACTION_WITNESS};
-use ser::{Deserializable, Error, Reader, Serializable, Stream};
+//use ser::{ SERIALIZE_TRANSACTION_WITNESS};
+use bincode::{deserialize, serialize};
+//use ser::{Deserializable, Error, Reader, Stream};
 use std::io;
 
 /// Must be zero.
@@ -17,7 +18,7 @@ const WITNESS_MARKER: u8 = 0;
 /// Must be nonzero.
 const WITNESS_FLAG: u8 = 1;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Default, Serializable, Deserializable)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Default, Serialize, Deserialize)]
 pub struct OutPoint {
     pub hash: H256,
     pub index: u32,
@@ -45,7 +46,7 @@ impl OutPoint {
     }
 }
 
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
 pub struct TransactionInput {
     pub previous_output: OutPoint,
     pub script_sig: Bytes,
@@ -78,7 +79,7 @@ impl HeapSizeOf for TransactionInput {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serializable, Deserializable)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct TransactionOutput {
     pub value: u64,
     pub script_pubkey: Bytes,
@@ -99,7 +100,7 @@ impl HeapSizeOf for TransactionOutput {
     }
 }
 
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
 pub struct Transaction {
     pub version: i32,
     pub inputs: Vec<TransactionInput>,
@@ -121,12 +122,12 @@ impl HeapSizeOf for Transaction {
 
 impl Transaction {
     pub fn hash(&self) -> H256 {
-        dhash256(&serialize(self))
+        dhash256(&serialize(self).unwrap())
     }
 
-    pub fn witness_hash(&self) -> H256 {
-        dhash256(&serialize_with_flags(self, SERIALIZE_TRANSACTION_WITNESS))
-    }
+//    pub fn witness_hash(&self) -> H256 {
+//        dhash256(&serialize_with_flags(self, SERIALIZE_TRANSACTION_WITNESS))
+//    }
 
     pub fn inputs(&self) -> &[TransactionInput] {
         &self.inputs
@@ -194,90 +195,90 @@ impl Transaction {
     }
 }
 
-impl Serializable for TransactionInput {
-    fn serialize(&self, stream: &mut Stream) {
-        stream
-            .append(&self.previous_output)
-            .append(&self.script_sig)
-            .append(&self.sequence);
-    }
-}
-
-impl Deserializable for TransactionInput {
-    fn deserialize<T>(reader: &mut Reader<T>) -> Result<Self, Error>
-    where
-        Self: Sized,
-        T: io::Read,
-    {
-        Ok(TransactionInput {
-            previous_output: reader.read()?,
-            script_sig: reader.read()?,
-            sequence: reader.read()?,
-            script_witness: vec![],
-        })
-    }
-}
-
-impl Serializable for Transaction {
-    fn serialize(&self, stream: &mut Stream) {
-        let include_transaction_witness =
-            stream.include_transaction_witness() && self.has_witness();
-        match include_transaction_witness {
-            false => stream
-                .append(&self.version)
-                .append_list(&self.inputs)
-                .append_list(&self.outputs)
-                .append(&self.lock_time),
-            true => {
-                stream
-                    .append(&self.version)
-                    .append(&WITNESS_MARKER)
-                    .append(&WITNESS_FLAG)
-                    .append_list(&self.inputs)
-                    .append_list(&self.outputs);
-                for input in &self.inputs {
-                    stream.append_list(&input.script_witness);
-                }
-                stream.append(&self.lock_time)
-            }
-        };
-    }
-}
-
-impl Deserializable for Transaction {
-    fn deserialize<T>(reader: &mut Reader<T>) -> Result<Self, Error>
-    where
-        Self: Sized,
-        T: io::Read,
-    {
-        let version = reader.read()?;
-        let mut inputs: Vec<TransactionInput> = reader.read_list()?;
-        let read_witness = if inputs.is_empty() {
-            let witness_flag: u8 = reader.read()?;
-            if witness_flag != WITNESS_FLAG {
-                return Err(Error::MalformedData);
-            }
-
-            inputs = reader.read_list()?;
-            true
-        } else {
-            false
-        };
-        let outputs = reader.read_list()?;
-        if read_witness {
-            for input in inputs.iter_mut() {
-                input.script_witness = reader.read_list()?;
-            }
-        }
-
-        Ok(Transaction {
-            version: version,
-            inputs: inputs,
-            outputs: outputs,
-            lock_time: reader.read()?,
-        })
-    }
-}
+//impl Serializable for TransactionInput {
+//    fn serialize(&self, stream: &mut Stream) {
+//        stream
+//            .append(&self.previous_output)
+//            .append(&self.script_sig)
+//            .append(&self.sequence);
+//    }
+//}
+//
+//impl Deserializable for TransactionInput {
+//    fn deserialize<T>(reader: &mut Reader<T>) -> Result<Self, Error>
+//    where
+//        Self: Sized,
+//        T: io::Read,
+//    {
+//        Ok(TransactionInput {
+//            previous_output: reader.read()?,
+//            script_sig: reader.read()?,
+//            sequence: reader.read()?,
+//            script_witness: vec![],
+//        })
+//    }
+//}
+//
+//impl Serializable for Transaction {
+//    fn serialize(&self, stream: &mut Stream) {
+//        let include_transaction_witness =
+//            stream.include_transaction_witness() && self.has_witness();
+//        match include_transaction_witness {
+//            false => stream
+//                .append(&self.version)
+//                .append_list(&self.inputs)
+//                .append_list(&self.outputs)
+//                .append(&self.lock_time),
+//            true => {
+//                stream
+//                    .append(&self.version)
+//                    .append(&WITNESS_MARKER)
+//                    .append(&WITNESS_FLAG)
+//                    .append_list(&self.inputs)
+//                    .append_list(&self.outputs);
+//                for input in &self.inputs {
+//                    stream.append_list(&input.script_witness);
+//                }
+//                stream.append(&self.lock_time)
+//            }
+//        };
+//    }
+//}
+//
+//impl Deserializable for Transaction {
+//    fn deserialize<T>(reader: &mut Reader<T>) -> Result<Self, Error>
+//    where
+//        Self: Sized,
+//        T: io::Read,
+//    {
+//        let version = reader.read()?;
+//        let mut inputs: Vec<TransactionInput> = reader.read_list()?;
+//        let read_witness = if inputs.is_empty() {
+//            let witness_flag: u8 = reader.read()?;
+//            if witness_flag != WITNESS_FLAG {
+//                return Err(Error::MalformedData);
+//            }
+//
+//            inputs = reader.read_list()?;
+//            true
+//        } else {
+//            false
+//        };
+//        let outputs = reader.read_list()?;
+//        if read_witness {
+//            for input in inputs.iter_mut() {
+//                input.script_witness = reader.read_list()?;
+//            }
+//        }
+//
+//        Ok(Transaction {
+//            version: version,
+//            inputs: inputs,
+//            outputs: outputs,
+//            lock_time: reader.read()?,
+//        })
+//    }
+//}
 
 #[cfg(test)]
 mod tests {

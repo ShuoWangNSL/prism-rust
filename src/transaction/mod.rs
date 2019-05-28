@@ -1,7 +1,13 @@
 use crate::crypto::hash::{Hashable, H256};
 use crate::crypto::sign::{KeyPair, PubKey, Signable, Signature};
 use bincode::serialize;
+use heapsize;
 use crate::experiment::performance_counter::PayloadSize;
+pub mod transaction;
+extern crate primitives;
+
+pub use primitives::{bigint, bytes, compact, hash};
+
 
 /// A unique identifier of a transaction output, a.k.a. a coin.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]

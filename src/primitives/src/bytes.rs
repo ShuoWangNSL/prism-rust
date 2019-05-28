@@ -5,7 +5,7 @@ use hex::{FromHex, FromHexError, ToHex};
 use std::{fmt, io, marker, ops, str};
 
 /// Wrapper around `Vec<u8>`
-#[derive(Default, PartialEq, Clone, Eq, Hash)]
+#[derive(Default, PartialEq, Clone, Eq, Hash, Serialize, Deserialize)]
 pub struct Bytes(Vec<u8>);
 
 impl Bytes {

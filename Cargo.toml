@@ -30,3 +30,7 @@ hex = "0.3"
 petgraph = "0.4"
 url = "1.7"
 base64 = "0.10"
+heapsize = "0.4"
+
+#chain = { path = "src/chain" }
+primitives = { path = "src/primitives" }

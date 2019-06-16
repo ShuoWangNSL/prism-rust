@@ -18,6 +18,7 @@ pub mod utxodb;
 pub mod validation;
 pub mod visualization;
 pub mod wallet;
+pub mod wallet_lmdb;
 pub mod api;
 pub mod experiment;
 

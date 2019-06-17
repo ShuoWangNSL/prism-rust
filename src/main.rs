@@ -217,7 +217,7 @@ fn main() {
             addrs.push(hash);
         }
         info!("Funding {} addresses with {} initial coins of {}", addrs.len(), num_coins, coin_value);
-        prism::experiment::ico(&addrs, &utxodb, &wallet, num_coins, coin_value).unwrap();
+//        prism::experiment::ico(&addrs, &utxodb, &wallet, num_coins, coin_value).unwrap();
     }
 
     // create wallet key pair if there is none

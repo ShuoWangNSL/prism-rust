@@ -10,12 +10,19 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 extern crate lmdb_zero as lmdb;
 extern crate tempdir;
+use lmdb::traits::LmdbRaw;
+use log::{debug, info};
 
 
 pub const COIN_CF: &str = "COIN";
 pub const KEYPAIR_CF: &str = "KEYPAIR";     // &Address to &KeyPairPKCS8
 
 pub type Result<T> = std::result::Result<T, WalletError>;
+
+// Lmdb can now accept coinid and output as raw data type
+unsafe impl LmdbRaw for CoinId {}
+unsafe impl LmdbRaw for Output {}
+
 
 /// A data structure to maintain key pairs and their coins, and to generate transactions.
 pub struct Wallet<'a> {
@@ -67,8 +74,8 @@ impl<'a> Wallet<'a> {
 
 
     pub fn load_keypair(&self, keypair: KeyPair) -> Result<Address> {
-//        let cf = self.db.cf_handle(KEYPAIR_CF).unwrap();
-//        self.db.put_cf(cf, &addr, &keypair.pkcs8_bytes)?;
+//        let cf = &self.db.cf_handle(KEYPAIR_CF).unwrap();
+//        &self.db.put_cf(cf, &addr, &keypair.pkcs8_bytes)?;
         let addr: Address = keypair.public_key().hash();
         let mut key_pair = self.key_pair.lock().unwrap();
         key_pair.insert(addr,keypair.pkcs8_bytes);
@@ -111,16 +118,18 @@ impl<'a> Wallet<'a> {
                         value: coin.value,
                         recipient: coin.owner,
                     };
-                    let key = serialize(&coin.coin).unwrap();
-                    let val = serialize(&output).unwrap();
-                    access.put(&self.db, &key, &val, lmdb::put::Flags::empty())?;
+                    access.put(&self.db, &coin.coin, &output, lmdb::put::Flags::empty())?;
                     self.counter.fetch_add(1, Ordering::Relaxed);
                 }
             }
 
             for coin in remove {
-                let key = serialize(&coin.coin).unwrap();
-                access.del_key(&self.db, &key)?;
+                match access.del_key(&self.db, &coin.coin){
+                    Err(e) => { info!("Coin {:?} cannot be deleted. Error {}", coin, e)}
+                    Ok(_) => {
+                        self.counter.fetch_sub(1, Ordering::Relaxed);
+                    }
+                }
             }
         }
         // commit the batch
@@ -137,89 +146,87 @@ impl<'a> Wallet<'a> {
             let mut cursor = txn.cursor(&self.db).unwrap();
             let mut iter = lmdb::CursorIter::new(
                 lmdb::MaybeOwned::Borrowed(&mut cursor), &*access,
-                |c, a| c.first(a), lmdb::Cursor::next::<Vec<u8>, Vec<u8>>).unwrap();
+                |c, a| c.first(a), lmdb::Cursor::next::<CoinId, Output>).unwrap();
+
             balance = iter
                 .map(|data|   {
                     let (_ ,v) = data.unwrap();
-                    let coin_data: Output = bincode::deserialize(v.as_ref()).unwrap();
-                    coin_data.value
+                    v.value
                 })
                 .sum::<u64>();
         }
         Ok(balance)
     }
-//
-//    /// Create a transaction using the wallet coins
-//    pub fn create_transaction(&self, recipient: Address, value: u64, previous_used_coin: Option<Input> ) -> Result<Transaction> {
-//        let mut coins_to_use: Vec<Input> = vec![];
-//        let mut value_sum = 0u64;
-//        let cf = self.db.cf_handle(COIN_CF).unwrap();
-//        let iter = match previous_used_coin {
-//            Some(c) => {
-//                let prev_key = serialize(&c.coin).unwrap();
-//                self.db.iterator_cf(cf, rocksdb::IteratorMode::From(&prev_key, rocksdb::Direction::Forward))?
-//            },
-//            None => self.db.iterator_cf(cf, rocksdb::IteratorMode::Start)?
-//        };
-//        // iterate through our wallet
-//        for (k, v) in iter {
-//            let coin_id: CoinId = bincode::deserialize(k.as_ref()).unwrap();
-//            let coin_data: Output = bincode::deserialize(v.as_ref()).unwrap();
-//            value_sum += coin_data.value;
-//            coins_to_use.push(Input {
-//                coin: coin_id,
-//                value: coin_data.value,
-//                owner: coin_data.recipient,
-//            }); // coins that will be used for this transaction
-//            if value_sum >= value {
-//                // if we already have enough money, break
-//                break;
-//            }
-//        }
-//        if value_sum < value {
-//            // we don't have enough money in wallet
-//            return Err(WalletError::InsufficientBalance);
-//        }
-//        // if we have enough money in our wallet, create tx
-//        // remove used coin from wallet
-//        self.apply_diff(&vec![], &coins_to_use)?;
-//
-//        // create the output
-//        let mut output = vec![Output { recipient, value }];
-//        if value_sum > value {
-//            // transfer the remaining value back to self
-//            let recipient = self.addresses()?[0];
-//            output.push(Output {
-//                recipient,
-//                value: value_sum - value,
-//            });
-//        }
-//
-//        let mut owners: Vec<Address> = coins_to_use.iter().map(|input|input.owner).collect();
-//        let unsigned = Transaction {
-//            input: coins_to_use,
-//            output: output,
-//            authorization: vec![],
-//            hash: RefCell::new(None),
-//        };
-//        let mut authorization = vec![];
-//        owners.sort_unstable();
-//        owners.dedup();
-//        for owner in owners.iter() {
-//            let keypair = self.keypair(&owner)?;
-//            authorization.push(Authorization {
-//                pubkey: keypair.public_key(),
-//                signature: unsigned.sign(&keypair),
-//            });
-//        }
-//        self.counter.fetch_sub(unsigned.input.len(), Ordering::Relaxed);
-//        Ok(Transaction {
-//            authorization,
-//            ..unsigned
-//        })
-//    }
-}
 
+    /// Create a transaction using the wallet coins
+    pub fn create_transaction(&mut self, recipient: Address, value: u64, previous_used_coin: Option<Input> ) -> Result<Transaction> {
+        let mut coins_to_use: Vec<Input> = vec![];
+        let mut value_sum = 0u64;
+        {
+            let txn = lmdb::WriteTransaction::new(Arc::clone(&self.env))?;
+            let mut access = txn.access();
+            let mut cursor = txn.cursor(&self.db).unwrap();
+            let mut iter = lmdb::CursorIter::new(
+                lmdb::MaybeOwned::Borrowed(&mut cursor), &*access,
+                |c, a| c.first(a), lmdb::Cursor::next::<CoinId, Output>).unwrap();
+            // iterate through our wallet
+            for data in iter {
+                let (coin_id ,coin_data) = data.unwrap();
+                value_sum += coin_data.value;
+                coins_to_use.push(Input {
+                    coin: *coin_id,
+                    value: coin_data.value,
+                    owner: coin_data.recipient,
+                }); // coins that will be used for this transaction
+                if value_sum >= value {
+                    // if we already have enough money, break
+                    break;
+                }
+            }
+            if value_sum < value {
+                // we don't have enough money in wallet
+                return Err(WalletError::InsufficientBalance);
+            }
+        }
+        // if we have enough money in our wallet, create tx
+        // remove used coin from wallet
+        self.apply_diff(&vec![], &coins_to_use)?;
+
+        // create the output
+        let mut output = vec![Output { recipient, value }];
+        if value_sum > value {
+            // transfer the remaining value back to self
+            let recipient = self.addresses()?[0];
+            output.push(Output {
+                recipient,
+                value: value_sum - value,
+            });
+        }
+
+        let mut owners: Vec<Address> = coins_to_use.iter().map(|input| input.owner).collect();
+        let unsigned = Transaction {
+            input: coins_to_use,
+            output: output,
+            authorization: vec![],
+            hash: RefCell::new(None),
+        };
+        let mut authorization = vec![];
+        owners.sort_unstable();
+        owners.dedup();
+        for owner in owners.iter() {
+            let keypair = self.keypair(&owner)?;
+            authorization.push(Authorization {
+                pubkey: keypair.public_key(),
+                signature: unsigned.sign(&keypair),
+            });
+        }
+        Ok(Transaction {
+            authorization,
+            ..unsigned
+        })
+
+    }
+}
 
 #[derive(Debug)]
 pub enum WalletError {

@@ -6,6 +6,7 @@ use bincode::serialize;
 use crate::experiment::performance_counter::PayloadSize;
 
 /// A unique identifier of a transaction output, a.k.a. a coin.
+#[repr(packed)]
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct CoinId {
     /// The hash of the transaction that produces this coin.
@@ -35,6 +36,7 @@ pub struct Input {
 
 /// An output of a transaction.
 // TODO: coinbase output (transaction fee). Maybe we don't need that in this case.
+#[repr(packed)]
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Output {
     /// The amount of this output.

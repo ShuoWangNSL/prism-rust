@@ -4,7 +4,7 @@ use prism::transaction::Transaction;
 use prism::utxodb::UtxoDatabase;
 use prism::crypto::hash::Hashable;
 use prism::experiment::ico;
-use prism::wallet::Wallet;
+use prism::wallet_lmdb::Wallet;
 use std::sync::mpsc;
 use std::time::Instant;
 use std::thread;
@@ -12,7 +12,7 @@ use std::sync::Arc;
 use log::{debug, error, info};
 use std::process;
 
-const REPEAT: usize = 2000;
+const REPEAT: usize = 20000;
 const TX_COUNT: usize = 100;
 
 fn main() {
@@ -23,8 +23,7 @@ fn main() {
   let utxodb = Arc::new(utxodb);
 
 
-  let wallet = Wallet::new("/tmp/bench_wallet2.rocksdb").unwrap();
-  let wallet = Arc::new(wallet);
+  let mut wallet = Wallet::new("/tmp/bench_wallet2.rocksdb").unwrap();
 
   // load wallet keys
   let key_path = "testbed/0.pkcs8";
@@ -52,8 +51,9 @@ fn main() {
   }
 
   //ico
-  ico(&wallet.addresses().unwrap(), &utxodb, &wallet);
-  println!("The wallet starts with {} coins.", wallet.number_of_coins());
+  ico(&wallet.addresses().unwrap(), &utxodb, &mut wallet, TX_COUNT*10, 100);
+  println!("The wallet starts with {} coins with balance {}", wallet.number_of_coins(), wallet.balance().unwrap());
+
   let mut rng = rand::thread_rng();
 
   let start = Instant::now();
@@ -61,8 +61,9 @@ fn main() {
   let addr = wallet.addresses().unwrap()[0];
   let value: u64 = 100; //rng.gen_range(10, 20);
   let mut prev_coin = None;
-
-  for i in 1..(REPEAT+1) {
+  let mut i: usize = 0;
+  loop {
+    i += 1;
     let mut txs: Vec<Transaction> = vec![];
 
     for _ in 0..TX_COUNT {
@@ -85,7 +86,7 @@ fn main() {
 
     let end = Instant::now();
     let time = end.duration_since(start).as_micros() as f64 - update_time;
-    println!("Rate_total {} \n", (((i+1)*TX_COUNT) as f64)*1000000.0/time);
+    println!("Rate_total {}. Total Time {}", (((i+1)*TX_COUNT) as f64)*1000000.0/time, time/1000000.0);
 //    println!("The wallet {} coins after {} repeat and update. Valid txs {} \n", wallet.number_of_coins(), i, coin_diff.0.len());
 
   }

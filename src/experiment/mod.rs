@@ -4,13 +4,13 @@ pub mod performance_counter;
 
 use crate::utxodb::UtxoDatabase;
 use crate::transaction::{CoinId, Input, Output, Transaction};
-use crate::wallet::Wallet;
+use crate::wallet_lmdb::Wallet;
 use crate::crypto::hash::H256;
 
 pub fn ico(
     recipients: &[H256], // addresses of all the ico recipients
     utxodb: &UtxoDatabase,
-    wallet: &Wallet,
+    wallet: &mut Wallet,
     num_coins: usize,
     value: u64,
 ) -> Result<(), rocksdb::Error> {

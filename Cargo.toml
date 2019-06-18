@@ -37,3 +37,8 @@ hex = "0.3"
 petgraph = "0.4"
 url = "1.7"
 base64 = "0.10"
+
+ed25519-dalek = "1.0.0-pre.1"
+
+[profile.dev]
+opt-level = 3

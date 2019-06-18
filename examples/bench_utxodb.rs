@@ -7,6 +7,7 @@ use std::sync::mpsc;
 use std::time::Instant;
 use std::thread;
 use std::sync::Arc;
+use bincode::serialize;
 
 const TX_COUNT: u32 = 10000;
 const TX_SIZE: f64 = 250.0;

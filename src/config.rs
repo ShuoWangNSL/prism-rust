@@ -1,4 +1,5 @@
 use crate::crypto::hash::H256;
+use std::sync::Mutex;
 
 // Longest chain k parameter
 pub const KAPPA: u64 = 6;
@@ -8,26 +9,58 @@ pub const NETWORK_DELAY: f32 = 2.0; // the expected block propagation delay (in 
 
 // Design parameters
 pub const NUM_VOTER_CHAINS: u16 = 0; // more chains means better latency
+lazy_static! {
+    pub static ref TX_BLOCK_SIZE: Mutex<u32> = {
+        Mutex::new(64000)
+    };
+    pub static ref TX_THROUGHPUT: Mutex<u32> = {
+        Mutex::new(70000)
+    };
+    pub static ref TX_BLOCK_TRANSACTIONS: Mutex<u32> = {
+        Mutex::new(*TX_BLOCK_SIZE.lock().unwrap() / AVG_TX_SIZE)
+    };
+    pub static ref PROPOSER_BLOCK_TX_REFS: Mutex<u32> = {
+        Mutex::new((*TX_MINING_RATE.lock().unwrap() / CHAIN_MINING_RATE * 2.0) as u32)
+    };
+    pub static ref TX_MINING_RATE: Mutex<f32> = {
+        Mutex::new(*TX_THROUGHPUT.lock().unwrap() as f32 / *TX_BLOCK_TRANSACTIONS.lock().unwrap() as f32)
+    };
+    pub static ref RATIO: Mutex<(f32, f32, f32)> = {
+        Mutex::new((
+                CHAIN_MINING_RATE,
+                CHAIN_MINING_RATE * (NUM_VOTER_CHAINS as f32),
+                *TX_MINING_RATE.lock().unwrap(),
+                ))
+    };
+    pub static ref RATE_DIFFICULTY_MULTIPLIER: Mutex<f32> = {
+        let ratio = *RATIO.lock().unwrap();
+        Mutex::new((TOTAL_MINING_RANGE as f32) / (ratio.0 + ratio.1 + ratio.2))
+    };
+    pub static ref VOTER_MINING_RANGE: Mutex<u32> = {
+        let ratio = *RATIO.lock().unwrap();
+        Mutex::new((*RATE_DIFFICULTY_MULTIPLIER.lock().unwrap() * ratio.1) as u32)
+    };
+    pub static ref PROPOSER_MINING_RANGE: Mutex<u32> = {
+        let ratio = *RATIO.lock().unwrap();
+        Mutex::new((*RATE_DIFFICULTY_MULTIPLIER.lock().unwrap() * ratio.0) as u32)
+    };
+    pub static ref TRANSACTION_MINING_RANGE: Mutex<u32> = {
+        let ratio = *RATIO.lock().unwrap();
+        Mutex::new((*RATE_DIFFICULTY_MULTIPLIER.lock().unwrap() * ratio.2) as u32)
+    };
+}
+/* this is not really used in longest chain
 pub const TX_BLOCK_SIZE: u32 = 64000; // the maximum size of a transaction block (in Bytes)
 pub const TX_THROUGHPUT: u32 = 700; // the transaction throughput we want to support (in Tx/s)
 pub const TX_BLOCK_TRANSACTIONS: u32 = TX_BLOCK_SIZE / AVG_TX_SIZE;
 pub const PROPOSER_BLOCK_TX_REFS: u32 = (TX_MINING_RATE / CHAIN_MINING_RATE * 2.0) as u32;
-
-pub const AVG_TX_SIZE: u32 = 280; // average size of a transaction (in Bytes)
-pub const TX_MINING_RATE: f32 = TX_THROUGHPUT as f32 / TX_BLOCK_TRANSACTIONS as f32;
-pub const CHAIN_MINING_RATE: f32 = 0.2 / NETWORK_DELAY; // mining rate of the proposer chain and each voter chain in Blks/s
-
-// Do not change from here
-
+pub const TX_MINING_RATE: f32 = TX_THROUGHPUT as f32 / TX_BLOCK_TRANSACTIONS.lock().unwrap() as f32;
 // Mining rate of each type (Proposer : Voter (all chains) : Transaction, in Blks/s)
 pub const RATIO: (f32, f32, f32) = (
     CHAIN_MINING_RATE,
     CHAIN_MINING_RATE * (NUM_VOTER_CHAINS as f32),
     TX_MINING_RATE,
 );
-
-// Sortition ranges
-pub const TOTAL_MINING_RANGE: u32 = 10000000; // This is for resolution
 pub const RATE_DIFFICULTY_MULTIPLIER: f32 =
     (TOTAL_MINING_RANGE as f32) / (RATIO.0 + RATIO.1 + RATIO.2);
 
@@ -35,6 +68,13 @@ pub const RATE_DIFFICULTY_MULTIPLIER: f32 =
 pub const VOTER_MINING_RANGE: u32 = (RATE_DIFFICULTY_MULTIPLIER * RATIO.1) as u32;
 pub const PROPOSER_MINING_RANGE: u32 = (RATE_DIFFICULTY_MULTIPLIER * RATIO.0) as u32;
 pub const TRANSACTION_MINING_RANGE: u32 = (RATE_DIFFICULTY_MULTIPLIER * RATIO.2) as u32;
+*/
+
+pub const AVG_TX_SIZE: u32 = 280; // average size of a transaction (in Bytes)
+pub const CHAIN_MINING_RATE: f32 = 0.2 / NETWORK_DELAY; // mining rate of the proposer chain and each voter chain in Blks/s
+
+// Sortition ranges
+pub const TOTAL_MINING_RANGE: u32 = 10000000; // This is for resolution
 
 // Chain id
 pub const TRANSACTION_INDEX: u16 = 1;

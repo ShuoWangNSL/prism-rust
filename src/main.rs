@@ -27,6 +27,7 @@ use std::process;
 use std::sync::Arc;
 use std::thread;
 use std::time;
+use prism::config::{TX_BLOCK_SIZE, TX_THROUGHPUT};
 
 fn main() {
     // parse command line arguments
@@ -47,6 +48,8 @@ fn main() {
      (@arg init_fund_value: --("fund-value") [INT] default_value("100") "Sets the value of each initial fund coin")
      (@arg load_key_path: --("load-key") ... [PATH] "Loads a key pair into the wallet from the given address")
      (@arg mempool_size: --("mempool-size") ... [SIZE] default_value("500000") "Sets the size limit of the memory pool")
+     (@arg tx_block_size: --("tx-block-size") [INT] "tx_block_size in config")
+     (@arg tx_throughput: --("tx-throughput") [INT] "tx_throughput in config")
      (@subcommand keygen =>
       (about: "Generates Prism wallet key pair")
       (@arg display_address: --addr "Prints the address of the key pair to STDERR")
@@ -78,6 +81,28 @@ fn main() {
     // init logger
     let verbosity = matches.occurrences_of("verbose") as usize;
     stderrlog::new().verbosity(verbosity).init().unwrap();
+
+    // set tx block size and tx throughput
+    if let Some(s) = matches.value_of("tx_block_size") {
+        let size = s.parse::<u32>()
+            .unwrap_or_else(|e| {
+                error!("Error parsing value of tx_block_size: {}", e);
+                process::exit(1);
+            });
+        let mut tx_block_size = TX_BLOCK_SIZE.lock().unwrap();
+        *tx_block_size = size;
+        info!("TX_BLOCK_SIZE is {}", size);
+    }
+    if let Some(s) = matches.value_of("tx_throughput") {
+        let size = s.parse::<u32>()
+            .unwrap_or_else(|e| {
+                error!("Error parsing value of tx_throughput: {}", e);
+                process::exit(1);
+            });
+        let mut tx_throughput = TX_THROUGHPUT.lock().unwrap();
+        *tx_throughput = size;
+        info!("TX_THROUGHPUT is {}", size);
+    }
 
     // init mempool
     let mempool_size = matches

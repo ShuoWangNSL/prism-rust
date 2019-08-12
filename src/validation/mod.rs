@@ -247,8 +247,8 @@ pub fn get_sortition_id(hash: &H256, difficulty: &H256) -> Option<u16> {
     let difficulty: [u8; 32] = difficulty.into();
     let big_difficulty = U256::from_big_endian(&difficulty);
     let total_mining_range: U256 = TOTAL_MINING_RANGE.into();
-    let big_proposer_range: U256 = PROPOSER_MINING_RANGE.into();
-    let big_transaction_range: U256 = TRANSACTION_MINING_RANGE.into();
+    let big_proposer_range: U256 = (*PROPOSER_MINING_RANGE.lock().unwrap()).into();
+    let big_transaction_range: U256 = (*TRANSACTION_MINING_RANGE.lock().unwrap()).into();
 
     if big_hash < big_difficulty / total_mining_range * big_proposer_range {
         // proposer block

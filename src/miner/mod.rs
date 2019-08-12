@@ -251,7 +251,7 @@ impl Context {
             // update transaction block content
             if new_transaction_block {
                 let mempool = self.mempool.lock().unwrap();
-                let transactions = mempool.get_transactions(TX_BLOCK_TRANSACTIONS);
+                let transactions = mempool.get_transactions(*TX_BLOCK_TRANSACTIONS.lock().unwrap());
                 drop(mempool);
                 let chain_id: usize = TRANSACTION_INDEX as usize;
                 if let Content::Transaction(c) = &mut self.contents[TRANSACTION_INDEX as usize] {
@@ -269,9 +269,9 @@ impl Context {
             if new_transaction_block && !new_proposer_block {
                 if let Content::Proposer(c) = &mut self.contents[PROPOSER_INDEX as usize] {
                     // only update the references if we are not running out of quota
-                    if c.transaction_refs.len() < PROPOSER_BLOCK_TX_REFS as usize {
+                    if c.transaction_refs.len() < *PROPOSER_BLOCK_TX_REFS.lock().unwrap() as usize {
                         let mut refs = self.blockchain.unreferred_transactions();
-                        refs.truncate(PROPOSER_BLOCK_TX_REFS as usize);
+                        refs.truncate(*PROPOSER_BLOCK_TX_REFS.lock().unwrap() as usize);
                         c.transaction_refs = refs;
                         touched_content.insert(PROPOSER_INDEX);
                     }
@@ -299,7 +299,7 @@ impl Context {
                 if new_proposer_block {
                     if let Content::Proposer(c) = &mut self.contents[PROPOSER_INDEX as usize] {
                         let mut refs = self.blockchain.unreferred_transactions();
-                        refs.truncate(PROPOSER_BLOCK_TX_REFS as usize);
+                        refs.truncate(*PROPOSER_BLOCK_TX_REFS.lock().unwrap() as usize);
                         c.transaction_refs = refs;
                         c.proposer_refs = self.blockchain.unreferred_proposers();
                         let parent = self.header.parent;

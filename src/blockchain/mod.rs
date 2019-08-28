@@ -667,7 +667,7 @@ impl BlockChain {
             };
 
             if new_leader != existing_leader {
-                info!("Confirming block at level {}", level);
+                info!("Confirming block at level {}: {:?} -> {:?}", level, existing_leader, new_leader);
                 // mark it's the beginning of the change
                 if change_begin.is_none() {
                     change_begin = Some(level);

@@ -5,7 +5,7 @@ use crate::network::server::Handle as ServerHandle;
 
 use crate::wallet::Wallet;
 use crossbeam::channel;
-use log::{info, trace};
+use log::{info, debug, trace};
 use rand::Rng;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -103,7 +103,9 @@ impl TransactionGenerator {
             // TODO: make it flexible
             let addr = self.wallet.addresses().unwrap()[0];
             let mut prev_coin = None;
+            let mut counter: u64 = 0;
             loop {
+                counter = counter + 1;
                 let tx_gen_start = time::Instant::now();
                 // check the current state and try to receive control message
                 match self.state {
@@ -128,6 +130,9 @@ impl TransactionGenerator {
                 if let State::Continuous(throttle) = self.state {
                     if self.mempool.lock().unwrap().len() as u64 >= throttle {
                         // if the mempool is full, just skip this transaction
+                        if counter % 10000 == 0 {
+                            debug!("mempool is full");
+                        }
                         let interval: u64 = match &self.arrival_distribution {
                             ArrivalDistribution::Uniform(d) => d.interval,
                         };
@@ -147,6 +152,9 @@ impl TransactionGenerator {
                 };
                 let transaction = self.wallet.create_transaction(addr, value, prev_coin);
                 PERFORMANCE_COUNTER.record_generate_transaction(&transaction);
+                if counter % 10000 == 0 {
+                    debug!("created another 10k transaction");
+                }
                 match transaction {
                     Ok(t) => {
                         prev_coin = Some(t.input.last().unwrap().coin);

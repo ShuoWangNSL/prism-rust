@@ -340,8 +340,8 @@ impl BlockChain {
                 drop(unreferred_transactions);
 
                 debug!(
-                    "Adding proposer block {:.8} at level {}",
-                    block_hash, self_level
+                    "Adding proposer block {:.8} at level {} with {} transaction block refs",
+                    block_hash, self_level, content.transaction_refs.len()
                 );
             }
             Content::Voter(content) => {
@@ -396,7 +396,7 @@ impl BlockChain {
                     block_hash, self_chain, self_level
                 );
             }
-            Content::Transaction(_content) => {
+            Content::Transaction(content) => {
                 // mark itself as unreferred
                 // Note that this could happen before committing to db, because no module will try
                 // to access transaction content based on pointers in unreferred_transactions.
@@ -406,6 +406,10 @@ impl BlockChain {
 
                 // This db write is only to facilitate check_existence
                 self.db.write(wb)?;
+                debug!(
+                    "Adding transaction block containing {} tx",
+                    content.transactions.len()
+                );
             }
         }
         Ok(())

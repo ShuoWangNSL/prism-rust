@@ -105,7 +105,7 @@ impl TransactionGenerator {
             let mut prev_coin = None;
             let mut counter: u64 = 0;
             loop {
-                counter = counter + 1;
+                counter = (counter + 1) % 1000;
                 let tx_gen_start = time::Instant::now();
                 // check the current state and try to receive control message
                 match self.state {
@@ -128,10 +128,11 @@ impl TransactionGenerator {
                 }
                 // check whether the mempool is already full
                 if let State::Continuous(throttle) = self.state {
-                    if self.mempool.lock().unwrap().len() as u64 >= throttle {
+                    let len = self.mempool.lock().unwrap().len() as u64;
+                    if len >= throttle {
                         // if the mempool is full, just skip this transaction
-                        if counter % 10000 == 0 {
-                            debug!("mempool is full");
+                        if counter % 1000 == 0 {
+                            debug!("The mempool is full");
                         }
                         let interval: u64 = match &self.arrival_distribution {
                             ArrivalDistribution::Uniform(d) => d.interval,
@@ -139,6 +140,11 @@ impl TransactionGenerator {
                         let interval = time::Duration::from_micros(interval);
                         thread::sleep(interval);
                         continue;
+                    } else if counter % 1000 == 0 {
+                        debug!(
+                            "The mempool size is {}",
+                            len
+                        );
                     }
                 }
                 let value: u64 = match &self.value_distribution {
@@ -152,8 +158,8 @@ impl TransactionGenerator {
                 };
                 let transaction = self.wallet.create_transaction(addr, value, prev_coin);
                 PERFORMANCE_COUNTER.record_generate_transaction(&transaction);
-                if counter % 10000 == 0 {
-                    debug!("created another 10k transaction");
+                if counter % 1000 == 0 {
+                    debug!("created another 1k transaction");
                 }
                 match transaction {
                     Ok(t) => {

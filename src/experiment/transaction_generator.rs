@@ -156,11 +156,14 @@ impl TransactionGenerator {
                         }
                     }
                 };
+                let wallet_start = time::Instant::now();
                 let transaction = self.wallet.create_transaction(addr, value, prev_coin);
-                PERFORMANCE_COUNTER.record_generate_transaction(&transaction);
+                let tx_gen_time = time::Instant::now().duration_since(wallet_start);
                 if counter % 1000 == 0 {
-                    debug!("created another 1k transaction");
+                    debug!("created another 1k transaction. Last tx gen duration is: {} nanos", tx_gen_time.as_nanos());
                 }
+                PERFORMANCE_COUNTER.record_generate_transaction(&transaction);
+
                 match transaction {
                     Ok(t) => {
                         prev_coin = Some(t.input.last().unwrap().coin);
